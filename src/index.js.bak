@@ -1,0 +1,79 @@
+const mongoose = require('mongoose');
+const app = require('./app');
+const config = require('./config/config');
+const logger = require('./config/logger');
+require("dotenv").config();
+//const redis = require('redis');
+const Queue = require('bee-queue');
+
+const options = {
+    removeOnSuccess: true,
+    redis: {
+        host: process.env.REDIS_HOSTNAME,
+        port: process.env.REDIS_PORT,
+        password: process.env.REDIS_PASSWORD,
+    },
+}
+
+const cookQueue = new Queue('cook', options);
+const serveQueue = new Queue('serve', options);
+
+
+const placeOrder = (order) => {
+    return cookQueue.createJob(order).save();
+};
+
+serveQueue.process((job, done) => {
+    logger.info(`🧾 ${job.data.qty}x ${job.data.dish} ready to be served 😋`);
+    // Notify the client via push notification, web socket or email etc.
+    done();
+})
+
+let server;
+mongoose.connect(config.mongoose.url, config.mongoose.options).then(() => {
+  logger.info('Connected to MongoDB');
+  server = app.listen(config.port, () => {
+    logger.info(`Listening to port ${config.port}`);
+  });
+});
+
+// const client = redis.createClient({
+//   host: process.env.REDIS_HOSTNAME,
+//   port: process.env.REDIS_PORT,
+//   password: process.env.REDIS_PASSWORD
+// });
+// logger.info(process.env.REDIS_HOSTNAME + '   ' + process.env.REDIS_PORT + '  ' + process.env.REDIS_PASSWORD)
+
+// client.on('ready', () => {
+//   logger.info('Connected to our redis instance!');
+//   client.set("Greatest Basketball Player", "Lebron James");
+// })
+// client.on('error', (err) => {
+//   logger.info('redis is disconnected: ', err);
+// });
+
+const exitHandler = () => {
+  if (server) {
+    server.close(() => {
+      logger.info('Server closed');
+      process.exit(1);
+    });
+  } else {
+    process.exit(1);
+  }
+};
+
+const unexpectedErrorHandler = (error) => {
+  logger.error(error);
+  exitHandler();
+};
+
+process.on('uncaughtException', unexpectedErrorHandler);
+process.on('unhandledRejection', unexpectedErrorHandler);
+
+process.on('SIGTERM', () => {
+  logger.info('SIGTERM received');
+  if (server) {
+    server.close();
+  }
+});
