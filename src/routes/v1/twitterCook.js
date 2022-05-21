@@ -71,6 +71,8 @@ function processResponseData(userid,  query, data) {
     //            "#freelancers in #Bangalore @hiverhq #creative https://t.co/OQKlx5ENmG\"" +
     //         "}]}";
     
+    
+    console.log("calling db");
     tweetFeed.create(tweetToDB, function (err, doc) {
         if (err) { 
             console.log(err);
